@@ -15,7 +15,7 @@ jobs:
           bun-version: latest
 
       - name: Install Dependencies
-        run: bun install --frozen-lockfile
+        run: cd test-cl && bun install --frozen-lockfile
 
       - name: Run linter
-        run: bun run lint
+        run: cd test-cl && bun run lint
