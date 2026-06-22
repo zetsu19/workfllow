@@ -19,6 +19,21 @@ jobs:
 
       - name: Run linter
         run: cd test-cl && bun run lint
-  build:
-    name: build,
-    run: bun run build
+
+build-job:
+  runs-on: ubuntu-latest
+  needs: lint-job
+  steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Install Dependencies
+      run: cd test-cl && bun install --frozen-lockfile
+
+    - name: Run Build
+      run: cd test-cl && bun run build
