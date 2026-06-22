@@ -19,3 +19,6 @@ jobs:
 
       - name: Run linter
         run: cd test-cl && bun run lint
+  build:
+    name: build,
+    run: bun run build
