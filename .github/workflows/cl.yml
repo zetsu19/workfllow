@@ -20,9 +20,9 @@ jobs:
       - name: Run linter
         run: cd test-cl && bun run lint
 
-build-job:
-  runs-on: ubuntu-latest
+build:
   needs: lint-job
+  runs-on: ubuntu-latest
   steps:
     - name: Checkout Code
       uses: actions/checkout@v4
