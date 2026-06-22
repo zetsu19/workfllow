@@ -1,0 +1,18 @@
+{
+  "name": "github-workflow",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/bun": "latest",
+    "typescript-eslint": "^8.61.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "build": "bun build ./index.ts --outdir ./dist --target bun"
+  }
+}
