@@ -23,6 +23,7 @@ class Item:
     qty: float
     price: float
     total: float
+    weak: bool = False  # тоо×үнэ=дүн батлагдаагүй
 
 
 def _num(tok: str):
@@ -123,6 +124,17 @@ def grand_total(text: str):
     return best
 
 
+def _quality(name: str) -> float:
+    """Нэрийн үсгийн эзлэх хувь (OCR-ийн хог тэмдэгт илрүүлэх)."""
+    chars = [c for c in name if not c.isspace()]
+    if not chars:
+        return 0.0
+    for w in name.split():  # нэг үгэнд кирилл+латин холилдвол OCR-ийн хог
+        if re.search(r"[A-Za-z]", w) and re.search(r"[А-Яа-яӨөҮүЁё]", w):
+            return 0.0
+    return sum(c.isalpha() for c in chars) / len(chars)
+
+
 def parse_items(text: str):
     items, pending = [], ""
     for raw in text.splitlines():
@@ -150,10 +162,13 @@ def parse_items(text: str):
             pending = ""
         tr = _triple(nums) if len(nums) >= 3 else None
         if tr:
-            items.append(Item(name, *tr))
+            if _quality(name) >= 0.6:
+                items.append(Item(name, *tr))
             continue
         it = _build(name, _split(" ".join(toks))[1] or nums)
-        if it and it.total >= 100:
+        # үнэ/тоо баталгаагүй мөр: нэр нь цэвэр, үнэ бодитой байх ёстой
+        if it and it.total >= 500 and _quality(name) >= 0.85 and len(name) >= 4:
+            it.weak = True
             items.append(it)
     return items
 

@@ -46,4 +46,8 @@ def read_receipt(data: bytes):
                 return items, text, total, True
     if best is None:
         return [], "", None, False
-    return best[1], best[2], best[3], best[0][0]
+    _, items, text, total = best[0], best[1], best[2], best[3]
+    matched = best[0][0]
+    if total and not matched:  # нийт дүн таараагүй бол баталгаагүй мөрүүдийг хаяна
+        items = [i for i in items if not i.weak]
+    return items, text, total, matched
