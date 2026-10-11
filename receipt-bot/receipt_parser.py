@@ -76,10 +76,10 @@ def _build(name, nums):
         q, p, t = nums[-3:]
         if abs(q * p - t) <= max(1, t * 0.02):
             return Item(name, q, p, t)
-        if len(nums) >= 2:  # name дотор тоо орсон байж болно
-            p, t = nums[-2:]
-            q = round(t / p) if p else 1
-            return Item(name, q or 1, p, t)
+        p, t = nums[-2:]  # name дотор тоо орсон байж болно
+        if p >= 100 and t > p and abs(t / p - round(t / p)) < 0.01 and round(t / p) <= 200:
+            return Item(name, round(t / p), p, t)
+        return None
     if len(nums) == 2:
         a, b = nums
         if a and b and b >= a and abs(round(b / a) - b / a) < 0.01 and a < 1000 and b / a > 1 and a == int(a) and a <= 200:
@@ -150,7 +150,7 @@ def parse_items(text: str):
         if nums and words and toks and toks[0] == f"{nums[0]:.0f}" and nums[0] < 1000 and len(nums) >= 3:
             nums = nums[1:]
         for n, w in enumerate(words[:4]):  # барааны код (ND29, cn25) болон түүний өмнөх хог
-            if len(words) > n + 1 and re.fullmatch(r"[A-Za-zА-Яа-яӨөҮү]{1,3}[\dOSЗ]{2,3}", w):
+            if len(words) > n + 1 and re.fullmatch(r"[A-Za-zА-Яа-яӨөҮү]{1,3}[\dOSЗIl]{2,3}", w):
                 words = words[n + 1:]
                 break
         name = " ".join(words).strip(" .:-|_()—~")

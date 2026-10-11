@@ -177,7 +177,9 @@ def read_receipt(data: bytes):
         return items, confs
 
     built, confs = build(union)
-    keep = [n for n, i in enumerate(built) if not (i.weak and totals) and i.total < 2e7]
+    strong = sum(not i.weak for i in built)
+    # "тоо×үнэ=дүн" батлагдсан мөр 3+ байвал баталгаагүй (weak) мөр бүгд OCR-ийн хог
+    keep = [n for n, i in enumerate(built) if not (i.weak and (totals or strong >= 3)) and i.total < 2e7]
     items, conf = [built[n] for n in keep], [confs[n] for n in keep]
 
     def matches(s):
