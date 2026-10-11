@@ -7,7 +7,7 @@ SKIP = re.compile(
     r"нийт|дүн|total|sum|нөат|ноат|тод|ттд|vat|cash|бэлэн|карт|card|change|"
     r"хариулт|сугалаа|lottery|баярлалаа|thank|ebarimt|и-баримт|дугаар|"
     r"qr|merchant|терминал|terminal|утас|tel|address|хаяг|нэгж үнэ|барааны нэр|"
-    r"төлбөр|хөнгөлөлт|discount|ү/н|№\s*нэр",
+    r"төлбөр|хөнгөлөлт|discount|ү/н|№\s*нэр|бүтээгдэхүүн|бар\s*код|тоо\s*хэмжээ|хөн-|урамшуулал|данс|банк|захиалсан|хүргэх|худалдан\s*авагч",
     re.I,
 )
 NUM = re.compile(r"^[\d][\d,.\s']*$")
@@ -89,24 +89,77 @@ def _build(name, nums):
     return None
 
 
+def _tokens(line: str):
+    line = line.replace("|", " ").replace("₮", " ").replace("×", " ")
+    line = re.sub(r"\s[xх*]\s", " ", line, flags=re.I)
+    return line.split()
+
+
+def _triple(nums):
+    """Тоонуудаас qty*price≈total гэсэн гурвыг хайна."""
+    n = len(nums)
+    for i in range(n):
+        q = nums[i]
+        if not (0 < q <= 10000) or q != int(q) and q * 10 != int(q * 10):
+            continue
+        for j in range(i + 1, n):
+            p = nums[j]
+            if p <= 0:
+                continue
+            for k in range(j + 1, n):
+                t = nums[k]
+                if t > 0 and abs(q * p - t) <= max(1.0, t * 0.01):
+                    return q, p, t
+    return None
+
+
+def grand_total(text: str):
+    best = None
+    for line in text.splitlines():
+        if re.search(r"нийт\s*дүн|total", line, re.I) and not re.search(r"хөнгөлөлт", line, re.I):
+            nums = [v for v in (_num(t) for t in _tokens(line)) if v]
+            if nums:
+                best = max(nums)
+    return best
+
+
 def parse_items(text: str):
     items, pending = [], ""
     for raw in text.splitlines():
         line = raw.strip()
         if len(line) < 2 or SKIP.search(line):
             continue
-        name, nums = _split(line)
-        letters = re.search(r"[A-Za-zА-Яа-яӨөҮүЁё]{2}", name)
+        toks = [t for t in _tokens(line) if not re.fullmatch(r"\d{8,}", t)]  # бар код
+        nums, words = [], []
+        for t in toks:
+            v = _num(t) if re.fullmatch(r"[\d][\d,.']*", t) else None
+            (nums if v is not None else words).append(v if v is not None else t)
+        # мөрийн дугаар (ө.х. "22 Olmeca ...") хасах
+        if nums and words and toks and toks[0] == f"{nums[0]:.0f}" and nums[0] < 1000 and len(nums) >= 3:
+            nums = nums[1:]
+        name = " ".join(words).strip(" .:-|_()")
+        letters = re.search(r"[A-Za-zА-Яа-яӨөҮүЁё]{3}", name)
         if not nums:
-            pending = line if letters else pending
+            pending = line if re.search(r"[A-Za-zА-Яа-яӨөҮүЁё]{3}", line) else pending
             continue
-        if not letters:  # зөвхөн тоотой мөр -> өмнөх нэрийн мөртэй нийлүүлнэ
+        if not letters:
             name, pending = pending, ""
+            if not name:
+                continue
         else:
             pending = ""
-        if not name or max(nums) < 100 and len(nums) == 1 and nums[0] < 10:
-            continue  # хэт жижиг/нэргүй мөр = дуу чимээ
-        it = _build(name, nums)
-        if it and it.total > 0:
+        tr = _triple(nums) if len(nums) >= 3 else None
+        if tr:
+            items.append(Item(name, *tr))
+            continue
+        it = _build(name, _split(" ".join(toks))[1] or nums)
+        if it and it.total >= 100:
             items.append(it)
     return items
+
+
+def score(items, total):
+    """Нийт дүнтэй таарвал өндөр оноо."""
+    s = sum(i.total for i in items)
+    ok = total is not None and abs(s - total) < 1
+    return (ok, len(items))
