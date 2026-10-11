@@ -1,0 +1,7 @@
+python-telegram-bot==21.6
+openpyxl
+pillow
+opencv-python-headless
+numpy
+anthropic
+pydantic
