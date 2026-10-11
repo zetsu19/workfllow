@@ -30,6 +30,7 @@ def append_items(path, d: date, items):
     for row in ws.iter_rows(min_row=2):  # өмнөх шинэ тэмдэглэгээг арилгана
         for c in row:
             c.fill = PatternFill(fill_type=None)
+    first = ws.max_row + 1
     for it in items:
         r = ws.max_row + 1
         ws.append([d, it.name, None, it.qty, it.price, f"=D{r}*E{r}"])
@@ -42,3 +43,21 @@ def append_items(path, d: date, items):
     ws.auto_filter.ref = f"A1:F{ws.max_row}"
     ws.freeze_panes = "A2"
     wb.save(path)
+    return first
+
+
+def update_row(path, row, name=None, qty=None, price=None):
+    """-> (хуучин нэр) ; нийт дүн томьёогоор өөрөө шинэчлэгдэнэ."""
+    wb = load_workbook(path)
+    ws = wb.active
+    if row < 2 or row > ws.max_row:
+        return None
+    old = ws.cell(row, 2).value
+    if name is not None:
+        ws.cell(row, 2).value = name
+    if qty is not None:
+        ws.cell(row, 4).value = qty
+    if price is not None:
+        ws.cell(row, 5).value = price
+    wb.save(path)
+    return old
