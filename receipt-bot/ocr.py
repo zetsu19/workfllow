@@ -6,7 +6,7 @@ import tempfile
 import cv2
 import numpy as np
 
-from receipt_parser import grand_total, parse_items, score
+from receipt_parser import _quality, grand_total, parse_items, score
 
 LANGS = os.environ.get("OCR_LANGS", "mon+eng")
 
@@ -24,12 +24,27 @@ def _variants(data: bytes):
     return [img, norm]
 
 
-def _tess(img, psm: int) -> str:
+def _tess(img, psm: int, langs: str = None) -> str:
     with tempfile.NamedTemporaryFile(suffix=".png") as f:
         cv2.imwrite(f.name, img)
-        r = subprocess.run(["tesseract", f.name, "stdout", "-l", LANGS, "--psm", str(psm)],
+        r = subprocess.run(["tesseract", f.name, "stdout", "-l", langs or LANGS, "--psm", str(psm)],
                            capture_output=True, text=True, timeout=120)
     return r.stdout
+
+
+def _refine_names(items, data):
+    """Тоо/үнэ нь батлагдсан мөрүүдийн нэрийг латин (eng) уншилтаар сайжруулна."""
+    texts = [_tess(v, p, "eng") for v, p in zip(_variants(data), (4, 6))]
+    for it in items:
+        best = it.name
+        for t in texts:
+            for line in t.splitlines():
+                for c in parse_items(line):
+                    if c.price == it.price and c.qty == it.qty:
+                        if _quality(c.name) >= 0.8 and len(c.name) > len(best):
+                            best = c.name
+        it.name = best
+    return items
 
 
 def read_receipt(data: bytes):
@@ -43,11 +58,11 @@ def read_receipt(data: bytes):
             if best is None or sc > best[0]:
                 best = (sc, items, text, total)
             if sc[0] and items:
-                return items, text, total, True
+                return _refine_names(items, data), text, total, True
     if best is None:
         return [], "", None, False
     _, items, text, total = best[0], best[1], best[2], best[3]
     matched = best[0][0]
     if total and not matched:  # нийт дүн таараагүй бол баталгаагүй мөрүүдийг хаяна
         items = [i for i in items if not i.weak]
-    return items, text, total, matched
+    return _refine_names([i for i in items if not i.weak], data) + [i for i in items if i.weak], text, total, matched
