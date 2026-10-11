@@ -34,8 +34,8 @@ async def on_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     else:
         return
     data = bytes(await f.download_as_bytearray())
-    items, text, gtotal, matched = await asyncio.to_thread(read_receipt, data)
-    d = find_date(msg.caption or "") or find_date(text) or msg.date.date()
+    items, gtotal, matched, rdate = await asyncio.to_thread(read_receipt, data)
+    d = find_date(msg.caption or "") or rdate or msg.date.date()
     if not items:
         await msg.reply_text("Падангаас мөр танилгүй. Илүү тод, шулуун зураг явуулна уу.")
         return
