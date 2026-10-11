@@ -24,6 +24,6 @@ def test_all():
     append_items(p, date(2026, 10, 6), it); append_items(p, date(2026, 10, 7), it[:1])
     from openpyxl import load_workbook
     ws = load_workbook(p).active
-    assert ws.max_row == 7 and ws["F2"].value == "=D2*E2"
+    assert ws.max_row == 7 and ws["F2"].value == 75000 and ws["H2"].value == 75000 + 48000 + 149500 + 6000 + 36900
 if __name__ == "__main__":
     test_all(); print("ok")

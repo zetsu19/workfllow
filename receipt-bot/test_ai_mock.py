@@ -16,7 +16,7 @@ def reply(model):
     gt = 109870 if model.startswith("claude-sonnet") else 999999  # haiku: таараагүй -> sonnet руу шилжинэ
     return {"id": "msg_1", "type": "message", "role": "assistant", "model": model, "stop_reason": "end_turn",
             "stop_sequence": None, "usage": {"input_tokens": 10, "output_tokens": 10},
-            "content": [{"type": "text", "text": json.dumps({"date": "2026-10-11", "grand_total": gt, "items": items})}]}
+            "content": [{"type": "text", "text": json.dumps({"store": "ХМ Наадам центр", "date": "2026-10-11", "grand_total": gt, "items": items})}]}
 
 
 class H(BaseHTTPRequestHandler):
@@ -35,7 +35,8 @@ def test():
     import cv2, numpy as np
     img = cv2.imencode(".png", np.full((300, 200, 3), 255, np.uint8))[1].tobytes()
     res = ai_vision.read_with_ai(img, ["Зөгийн бал"], client=client)
-    items, gt, matched, when, model = res
+    items, gt, matched, when, model, store = res
+    assert store == "ХМ Наадам центр"
     assert [c["model"] for c in CALLS] == ["claude-haiku-5-5", "claude-sonnet-5-5"], CALLS
     assert matched and model == "claude-sonnet-5-5" and len(items) == 2 and str(when) == "2026-10-11"
     b = CALLS[0]
@@ -43,10 +44,14 @@ def test():
     assert "Зөгийн бал" in b["messages"][0]["content"][1]["text"] and b["output_config"]["format"]["type"] == "json_schema"
     # санах ой + засвар
     d = tempfile.mkdtemp(); m = Memory(os.path.join(d, "m.json"))
-    p = os.path.join(d, "a.xlsx"); first = append_items(p, when, [Item("Valhalla Hrb", 3, 66000, 198000)])
-    old = update_row(p, first, "Valhalla Herb liqueur 35%", 3, 66000); m.learn(old, "Valhalla Herb liqueur 35%"); m.save()
+    p = os.path.join(d, "a.xlsx"); first = append_items(p, when, [Item("Valhalla Hrb", 3, 66000, 198000), Item("X", 1.07, 14780, 15815)], "ХМ")
+    old = update_row(p, first, "Valhalla Herb liqueur 35%", 2, 66000, (first, 2)); m.learn(old, "Valhalla Herb liqueur 35%"); m.save()
     it = [Item("valhalla  hrb", 1, 1, 1)]; Memory(os.path.join(d, "m.json")).apply(it)
     assert it[0].name == "Valhalla Herb liqueur 35%"
+    from openpyxl import load_workbook
+    ws = load_workbook(p).active
+    assert [c.value for c in ws[1]][-2:] == ["Дэлгүүр", "Падааны нийт"]
+    assert ws["F2"].value == 132000 and ws["G2"].value == "ХМ" and ws["H2"].value == 132000 + 15815 and ws["H3"].value is None, [c.value for c in ws[2]]
     print("ok")
 
 if __name__ == "__main__":

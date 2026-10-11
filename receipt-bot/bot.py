@@ -49,7 +49,7 @@ async def on_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     # 1-р давхарга: локал OCR
     items, gtotal, matched, rdate = await asyncio.to_thread(read_receipt, data)
-    source = "OCR"
+    source, store = "OCR", None
     # 2-3-р давхарга: нийт дүн таараагүй бол AI
     if not matched and ai_vision.available():
         try:
@@ -58,7 +58,7 @@ async def on_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             log.exception("AI failed")
             res = None
         if res:
-            items, gtotal, matched, adate, model = res
+            items, gtotal, matched, adate, model, store = res
             rdate, source = adate or rdate, f"AI ({model})"
     if not items:
         await msg.reply_text("Падангаас мөр танилгүй. Илүү тод, шулуун зураг (Файл хэлбэрээр) явуулна уу.")
@@ -67,7 +67,9 @@ async def on_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     mem.apply(items)
     d = find_date(msg.caption or "") or rdate or msg.date.date()
     path = xlsx_path(msg.chat_id)
-    first = append_items(path, d, items)
+    cap = (msg.caption or "").strip()
+    store = store or (cap if cap and not find_date(cap) else None)  # caption-д дэлгүүрийн нэр бичиж болно
+    first = append_items(path, d, items, store)
     mem.d["last"] = {"start": first, "count": len(items)}
     if matched:  # нийт дүнтэй таарсан л бол барааны жагсаалтад нэмж суралцана
         mem.remember(items)
@@ -75,7 +77,7 @@ async def on_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     total = sum(i.total for i in items)
     lines = [f"{n}. {i.name} — {_fmt(i.qty)} × {_fmt(i.price)} = {_fmt(i.total)}" for n, i in enumerate(items, 1)]
-    head = f"✅ {len(items)} мөр нэмлээ ({d:%d/%m/%Y}), нийт {total:,.0f}₮ · {source}"
+    head = f"✅ {len(items)} мөр нэмлээ ({d:%d/%m/%Y}){" · " + store if store else ""}, нийт {total:,.0f}₮ · {source}"
     if gtotal and not matched:
         head += f"\n⚠️ Падан дээрх нийт {gtotal:,.0f}₮ ≠ танисан {total:,.0f}₮ — шалгана уу. Засах: /fix <дугаар> <нэр> [qty=2 price=5000]"
     await msg.reply_text(head + "\n" + "\n".join(lines)[:3500])
@@ -103,7 +105,7 @@ async def cmd_fix(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             words.append(a)
     name = " ".join(words) or None
     row = last["start"] + int(args[0]) - 1
-    old = update_row(xlsx_path(msg.chat_id), row, name, kv.get("qty"), kv.get("price"))
+    old = update_row(xlsx_path(msg.chat_id), row, name, kv.get("qty"), kv.get("price"), (last["start"], last["count"]))
     if old is None:
         await msg.reply_text("Мөр олдсонгүй.")
         return

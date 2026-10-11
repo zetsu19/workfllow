@@ -23,6 +23,7 @@ class Line(BaseModel):
 
 
 class Receipt(BaseModel):
+    store: Optional[str]  # дэлгүүр/борлуулагчийн нэр
     date: Optional[str]  # YYYY-MM-DD
     grand_total: Optional[float]
     items: List[Line]
@@ -34,6 +35,7 @@ Rules:
 - qty: quantity (may be decimal, e.g. 1.07). unit_price: price per unit as printed. total: line amount as printed. If qty*unit_price does not match total, trust the printed numbers and re-read the digits carefully.
 - Ignore headers, VAT (НӨАТ), discounts, bonus/card/payment lines, totals, signatures and stamps. A second document visible at the edge of the photo is not part of the receipt.
 - grand_total: the receipt's printed overall total (Нийт дүн), or null if not visible.
+- store: the seller/shop name printed at the top (e.g. "ХМ Наадам центр"), or null.
 - date: receipt date as YYYY-MM-DD, or null.
 Return every row even if the photo is skewed or partly shadowed."""
 
@@ -73,7 +75,7 @@ def _ask(client, model: str, b64: str, hints: List[str]) -> Receipt:
 
 
 def read_with_ai(data: bytes, hints: List[str] = (), client=None):
-    """-> (items, grand_total, matched, date|None, model) | None"""
+    """-> (items, grand_total, matched, date|None, model, store|None) | None"""
     client = client or anthropic.Anthropic()
     b64, best = _prep(data), None
     for model in MODELS:
@@ -87,7 +89,7 @@ def read_with_ai(data: bytes, hints: List[str] = (), client=None):
         gt = r.grand_total
         matched = bool(items) and gt is not None and abs(s - gt) < 1
         when = find_date(r.date or "")
-        res = (items, gt if gt else s, matched, when, model)
+        res = (items, gt if gt else s, matched, when, model, (r.store or "").strip() or None)
         if matched:
             return res
         if items and (best is None or abs(s - (gt or s)) < best[0]):
