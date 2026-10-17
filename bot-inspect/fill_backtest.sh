@@ -3,7 +3,7 @@
 # Live bot/контейнерт ХҮРЭХГҮЙ: эх .py файлуудыг хуулж, ХУУЛБАР дээр засвар хийнэ. Эх файл өөрчлөгдөхгүй.
 #
 #   A  baseline        - таны backtest.py яг одоогийнхоороо
-#   B  fill шаардсан   - entry-д үнэ хүрсэн (4 цагийн дотор) тохиолдолд л арилжаа тооцно
+#   B  fill шаардсан   - entry-д үнэ хүрсэн (12 цагийн дотор = live setup_pending_expiry_h) тохиолдолд л тооцно
 #   C  fill + спрэд x2 - B + XAUUSD спрэд 0.30 -> 0.60
 #
 # Ажиллуулах:   bash fill_backtest.sh [ЭХЛЭХ] [ДУУСАХ]      (default 2025-12-15 2026-09-28)
@@ -61,7 +61,7 @@ if indent.strip():
     sys.exit("зангуу мөрийн дундуур байна, зогслоо")
 eol = s.index("\n", i)
 block = """if os.environ.get("BT_REQUIRE_FILL","")=="1":
-    fb=min(ei+int(os.environ.get("BT_FILL_BARS", str(240//TF_MIN[ENTRY_TF]))), jend)
+    fb=min(ei+int(os.environ.get("BT_FILL_BARS", str(720//TF_MIN[ENTRY_TF]))), jend)
     jf=ei
     while jf<=fb and not ((lo[jf]<=entry) if d=="bull" else (hi[jf]>=entry)):
         jf+=1
@@ -72,7 +72,8 @@ block = """if os.environ.get("BT_REQUIRE_FILL","")=="1":
 block = "".join(indent + ln + "\n" for ln in block.splitlines())
 patched = s[:eol + 1] + block + s[eol + 1:]
 open(os.path.join(d, "backtest_fill.py"), "w", encoding="utf-8").write(patched)
-sp = patched.replace('"XAUUSD":0.30, "GOLD":0.30', '"XAUUSD":0.60, "GOLD":0.60')
+import re
+sp = re.sub(r'("XAUUSD"\s*:\s*)0\.30(\s*,\s*"GOLD"\s*:\s*)0\.30', r'\g<1>0.60\g<2>0.60', patched)
 if sp == patched:
     print("АНХААР: спрэдийн мөр олдсонгүй, C хувилбар B-тэй ижил болно")
 open(os.path.join(d, "backtest_fill_sp.py"), "w", encoding="utf-8").write(sp)
