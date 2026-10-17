@@ -191,13 +191,47 @@ def analyze_file(path, since_ts):
         for f, v in sorted(fg.items(), key=lambda kv: -len(kv[1]))[:12]:
             out.append(f"  {f[:40]:40} n={len(v):3}  avgR={fmt(mean(v), 2)}")
 
-    mlk = Counter()
-    for x in closed:
-        if isinstance(x.get("ml"), dict):
-            mlk.update(x["ml"].keys())
-    if mlk:
-        out.append(f"  ML талбарууд: {dict(mlk)}")
+    out.extend(ml_and_cost_section(closed))
     return "\n".join(out), closed
+
+
+def ml_and_cost_section(closed):
+    out = []
+    wins = [x["r"] for x in closed if x["r"] > 0]
+    loss = [-x["r"] for x in closed if x["r"] < 0]
+    if wins and loss:
+        be = mean(loss) / (mean(wins) + mean(loss))
+        act = len(wins) / len(closed)
+        out.append("  -- ЦЭВЭР ТЭНЦЭЛ (бодит дундаж ашиг/алдагдлаар)")
+        out.append(f"  ашиг-алдагдалгүй болоход хэрэгтэй win rate={100 * be:.0f}%   бодит win rate={100 * act:.0f}%")
+
+    drag = [x["r"] - x["ml"]["r_net"] for x in closed
+            if isinstance(x.get("ml"), dict) and num(x["ml"].get("r_net")) is not None]
+    if drag:
+        out.append("  -- ЗАРДАЛ (r - r_net, комисс/своп/спрэд)")
+        out.append(f"  арилжаа тутамд дундаж={fmt(mean(drag), 3)}R   нийт={fmt(sum(drag))}R   (r_net дундаж={fmt(mean([x['ml']['r_net'] for x in closed if isinstance(x.get('ml'), dict) and num(x['ml'].get('r_net')) is not None]), 3)}R)")
+
+    mlx = [x for x in closed if isinstance(x.get("ml"), dict)]
+    if not mlx:
+        return out
+    out.append("  -- ML ШҮҮЛТҮҮР (ml.would_allow, ml.prob)")
+    out.append(f"  ML mode: {dict(Counter(str(x['ml'].get('mode')) for x in mlx))}   model: {dict(Counter(str(x['ml'].get('model')) for x in mlx))}")
+    for flag in (True, False):
+        v = [x["r"] for x in mlx if x["ml"].get("would_allow") is flag]
+        out.append(stats_block(f"would_allow={flag}", v))
+    pr = sorted((x for x in mlx if num(x["ml"].get("prob")) is not None), key=lambda x: x["ml"]["prob"])
+    if len(pr) >= 6:
+        k = len(pr) // 3
+        for label, part in (("prob доод 1/3", pr[:k]), ("prob дунд 1/3", pr[k:2 * k]), ("prob дээд 1/3", pr[2 * k:])):
+            ps = [x["ml"]["prob"] for x in part]
+            out.append(stats_block(f"{label} [{min(ps):.2f}..{max(ps):.2f}]", [x["r"] for x in part]))
+    rs = defaultdict(list)
+    for x in mlx:
+        rs[str(x["ml"].get("reason"))[:36]].append(x["r"])
+    out.append("  ML reason  [n, дундаж R]")
+    for k, v in sorted(rs.items(), key=lambda kv: -len(kv[1]))[:8]:
+        out.append(f"  {k:36} n={len(v):3}  avgR={fmt(mean(v), 2)}")
+    return out
 
 
 def skip_reasons(container, hours):
