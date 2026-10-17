@@ -26,6 +26,8 @@ def f(x, n=1):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=os.path.expanduser("~/hub/data/reports"))
+    ap.add_argument("--family", default="", help="engine нэрэнд агуулагдах үг (жишээ SMC, V6, TDV, CRT): дэлгэрэнгүй задаргааг зөвхөн тэдэнд хязгаарлана")
+    ap.add_argument("--csv", default="", help="бүх idea-г CSV болгон хадгалах (дараа нь гараар шинжлэхэд)")
     a = ap.parse_args()
     files = sorted(glob.glob(os.path.join(a.dir, "*.json")))
     if not files:
@@ -93,6 +95,19 @@ def main():
             v = [num(i["r"]) for _, _, i in with_r if bool(i.get("executed")) is flag]
             if v:
                 print(f"     executed={flag}: n={len(v)}  нийлбэр={sum(v):.1f}  дундаж={sum(v) / len(v):.2f}")
+    if a.csv:
+        import csv
+        with open(a.csv, "w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(["date", "bot", "engine", "sym", "dir", "t", "t_last", "entry", "sl", "tp1", "scans", "executed", "reason", "sim", "r", "mfe_r", "mae_r", "verdict"])
+            for d, b, i in ideas_all:
+                w.writerow([d, b, i.get("engine"), i.get("sym"), i.get("dir"), i.get("t"), i.get("t_last"), i.get("entry"), i.get("sl"), i.get("tp1"),
+                            i.get("scans"), int(bool(i.get("executed"))), str(i.get("reason"))[:80], i.get("sim"), i.get("r"), i.get("mfe_r"), i.get("mae_r"), i.get("verdict")])
+        print(f"\nCSV хадгаллаа: {a.csv}  ({len(ideas_all)} мөр)")
+    if a.family:
+        fam = a.family.lower()
+        with_r = [x for x in with_r if fam in str(x[2].get("engine")).lower()]
+        print(f"\n##### ДЭЛГЭРЭНГҮЙ ЗАДАРГАА: engine ~ '{a.family}'  (R-тэй idea: {len(with_r)}) #####")
     # ---- дэлгэрэнгүй: R-тэй idea-уудыг шинж чанараар нь задлах ----
     def line(name, vals):
         if not vals:
@@ -114,9 +129,12 @@ def main():
     group("ENGINE-ЭЭР", lambda d, b, i: str(i.get("engine")), 5)
     group("ENGINE x ОРСОН/АЛГАССАН", lambda d, b, i: f"{i.get('engine')} | {'орсон' if i.get('executed') else 'алгассан'}", 8)
     group("ЧИГЛЭЛЭЭР", lambda d, b, i: str(i.get("dir")), 1)
+    group("ENGINE-FAMILY x ЧИГЛЭЛ", lambda d, b, i: f"{str(i.get('engine')).split()[0]} | {i.get('dir')}", 5)
     group("SIM АНГИЛАЛААР (hub-ийн үр дүн)", lambda d, b, i: str(i.get("sim")), 1)
     group("АЛГАСАХ ШАЛТГААНААР: дундаж R (алгассан idea; ихэвчлэн сөрөг = алгасах нь зөв)",
           lambda d, b, i: None if i.get("executed") else str(i.get("reason"))[:46], 15)
+    group("АЛГАСАХ ШАЛТГААН x ENGINE-FAMILY (алгассан)",
+          lambda d, b, i: None if i.get("executed") else f"{str(i.get('engine')).split()[0]} | {str(i.get('reason'))[:36]}", 20)
 
     import re
 
@@ -140,7 +158,8 @@ def main():
 
     last = reports[-1]
     print("\n== method (сүүлийн тайлан; үнэлгээний арга):")
-    print(str(last.get("method"))[:900])
+    import textwrap
+    print("\n".join(textwrap.wrap(str(last.get("method")), 110)[:12]))
     print("\n== headline (сүүлийн):", str(last.get("headline"))[:200])
 
 
