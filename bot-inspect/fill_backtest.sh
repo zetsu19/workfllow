@@ -38,6 +38,13 @@ if ! "$WORK/venv/bin/python" -c "import pandas, numpy" >/dev/null 2>&1; then
 fi
 PY="$WORK/venv/bin/python"
 
+# BT_SYMBOL: заагаагүй бол TАНЫ config.SYMBOLS-ийн эхний идэвхтэй түлхүүрийг авна (GOLD/XAUUSD хувилбарын ялгааг зохицуулна)
+if [ -z "${BT_SYMBOL:-}" ]; then
+  BT_SYMBOL="$(cd "$WORK/src" && "$PY" -c "import config;print(next((s for s,c in config.SYMBOLS.items() if c.get('enabled',True)), next(iter(config.SYMBOLS))))" 2>/dev/null || true)"
+fi
+export BT_SYMBOL
+echo "BT_SYMBOL=${BT_SYMBOL:-<тодорхойгүй>}"
+
 echo "[2/4] хуулбар дээр засвар хийж байна..."
 "$PY" - "$WORK/src" <<'PYEOF'
 import sys, os
