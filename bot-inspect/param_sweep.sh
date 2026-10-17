@@ -42,7 +42,7 @@ py_compile.compile(os.path.join(d, "backtest_sweep.py"), doraise=True)
 print("засвар OK")
 PYEOF
 
-OUT="$WORK/out_sweep.txt"
+OUT="$WORK/out_sweep_${START}_${END}.txt"
 echo "ажиллаж байна (хэдэн минут)... -> $OUT"
 ( cd "$WORK/src" && BT_BASE="$DATA" BT_REQUIRE_FILL=1 BT_FILL_BARS="$FILL_BARS" BT_EXTRA=1 BT_SPREAD="$SPREAD" PYTHONUTF8=1 \
     timeout "$TIMEOUT" nice -n 19 "$PY" backtest_sweep.py "$START" "$END" sweep ) > "$OUT" 2>&1 || echo "(алдаатай дууссан - $OUT-ийг харна уу)"

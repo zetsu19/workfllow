@@ -193,6 +193,7 @@ def analyze_file(path, since_ts):
 
     out.extend(route_section(closed))
     out.extend(spread_section(closed))
+    out.extend(risk_bucket_section(closed))
     out.extend(ml_and_cost_section(closed))
     return "\n".join(out), closed
 
@@ -255,6 +256,26 @@ def spread_section(closed):
     over = lambda t: sum(1 for v in sp if v > t)
     out.append(f"  спрэд > 0.30: {over(0.30)} ({pct(over(0.30), len(sp))})   > 0.60: {over(0.60)} ({pct(over(0.60), len(sp))})   > 1.00: {over(1.00)} ({pct(over(1.00), len(sp))})")
     out.append(f"  спрэдийн зардал арилжаа тутамд дундаж={fmt(mean(cost_r), 3)}R   (backtest тогтмол 0.30 ≈ {fmt(0.30 / mean([abs(x.get('entry', 0) - (x.get('sl0') or x.get('sl') or 0)) for x in closed if num(x.get('entry')) is not None and num(x.get('sl0') if x.get('sl0') is not None else x.get('sl')) is not None] or [1]), 3)}R)")
+    return out
+
+
+def risk_bucket_section(closed):
+    """Алтны арилжааг SL-ийн зайгаар (|entry-sl0|, цэг) ангилж үр дүнг харуулна. BTC/бусад symbol-ыг оруулахгүй."""
+    gold = [x for x in closed if str(x.get("symbol", "")).upper() in ("GOLD", "XAUUSD")]
+    b = defaultdict(list)
+    for x in gold:
+        e = num(x.get("entry"))
+        s0 = num(x.get("sl0")) if num(x.get("sl0")) is not None else num(x.get("sl"))
+        if e is None or s0 is None:
+            continue
+        d = abs(e - s0)
+        key = ("a <3.0" if d < 3 else "b 3-5" if d < 5 else "c 5-8" if d < 8 else "d >=8")
+        b[key].append(x["r"])
+    if len([1 for v in b.values() for _ in v]) < 5 or len(b) < 2:
+        return []
+    out = ["  -- SL ЗАЙГААР (алт, |entry-sl0| цэгээр; 10 pip = 1.0 цэг)"]
+    for k in sorted(b):
+        out.append(stats_block(k[2:], b[k]))
     return out
 
 
