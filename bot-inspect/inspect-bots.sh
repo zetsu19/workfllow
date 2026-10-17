@@ -44,7 +44,7 @@ report() {
 
   # ---------- service олох ----------
   if [ ${#SERVICES[@]} -eq 0 ]; then
-    mapfile -t SERVICES < <(ls /etc/systemd/system/*.service 2>/dev/null | xargs -n1 -r basename | sed 's/\.service$//')
+    mapfile -t SERVICES < <(find /etc/systemd/system -maxdepth 1 -name '*.service' -type f 2>/dev/null | xargs -n1 -r basename | sed 's/\.service$//')
   fi
   section "ОЛДСОН SERVICE-ҮҮД"
   printf '%s\n' "${SERVICES[@]:-<олдсонгүй>}"
@@ -69,7 +69,11 @@ report() {
     WD="$(systemctl show "$s" -p WorkingDirectory --value 2>/dev/null)"
     EXEC="$(systemctl show "$s" -p ExecStart --value 2>/dev/null | grep -oE 'path=[^ ;]+' | head -1 | cut -d= -f2)"
     ARGS="$(systemctl show "$s" -p ExecStart --value 2>/dev/null | grep -oE 'argv\[\]=[^;]+' | head -1 | sed 's/argv\[\]=//')"
-    [ -z "$WD" ] || [ "$WD" = "/" ] && WD="$(dirname "$(echo "$ARGS" | tr ' ' '\n' | grep -E '\.(py|js|sh|mq5)$' | head -1)" 2>/dev/null)"
+    if [ -z "$WD" ] || [ "$WD" = "/" ]; then
+      SCRIPT="$(echo "$ARGS" | tr ' ' '\n' | grep -E '\.(py|js|sh|mq5)$' | head -1)"
+      WD=""; [ -n "$SCRIPT" ] && WD="$(dirname "$SCRIPT")"
+    fi
+    case "$WD" in ""|"."|"/"|"/root"|"/home"|"/etc"|"/usr"|"/usr/bin"|"/bin") echo "(WorkingDirectory тодорхойгүй/хэт өргөн: '$WD' - алгассан)"; continue ;; esac
     [ -d "$WD" ] || { echo "(WorkingDirectory олдсонгүй: '$WD')"; continue; }
     [ -n "${SEEN_DIRS[$WD]:-}" ] && { echo "(хавтас $WD өмнө нь шалгагдсан)"; continue; }
     SEEN_DIRS[$WD]=1
