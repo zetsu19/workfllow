@@ -27,9 +27,14 @@ cp "$SRC"/*.py "$WORK/src/"
 [ -d "$SRC/playbook" ] && mkdir -p "$WORK/src/playbook" && cp "$SRC"/playbook/*.json "$WORK/src/playbook/" 2>/dev/null || true
 
 if [ ! -x "$WORK/venv/bin/python" ]; then
-  echo "[1/4] venv + pandas/numpy суулгаж байна (нэг удаа)..."
-  python3 -m venv "$WORK/venv" || { echo "python3-venv дутуу: sudo apt install -y python3-venv"; exit 1; }
-  "$WORK/venv/bin/pip" install -q pandas numpy
+  echo "[1/4] venv үүсгэж байна..."
+  python3 -m venv "$WORK/venv" || { echo "python3-venv дутуу: apt install -y python3-venv   (дараа нь: rm -rf $WORK/venv)"; exit 1; }
+fi
+# өмнөх дутуу ажиллалтаас venv үлдсэн ч pandas/numpy байхгүй байж болно - импортоор шалгана
+if ! "$WORK/venv/bin/python" -c "import pandas, numpy" >/dev/null 2>&1; then
+  echo "[1/4] pandas/numpy суулгаж байна (нэг удаа, 1-3 минут)..."
+  "$WORK/venv/bin/python" -m pip install -q pandas numpy || \
+    { echo "pip суулгалт амжилтгүй. Интернэт/pip-г шалга: $WORK/venv/bin/python -m pip --version"; exit 1; }
 fi
 PY="$WORK/venv/bin/python"
 
