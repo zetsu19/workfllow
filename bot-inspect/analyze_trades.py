@@ -195,6 +195,21 @@ def analyze_file(path, since_ts):
     return "\n".join(out), closed
 
 
+def truthy(v):
+    """would_allow хэлбэр (bool, 0/1, 'yes'/'allow' ...) -> True/False/None."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    if isinstance(v, str):
+        t = v.strip().lower()
+        if t in ("true", "yes", "y", "1", "allow", "allowed", "ok", "pass"):
+            return True
+        if t in ("false", "no", "n", "0", "block", "blocked", "deny", "skip", ""):
+            return False
+    return None
+
+
 def ml_and_cost_section(closed):
     out = []
     wins = [x["r"] for x in closed if x["r"] > 0]
@@ -205,25 +220,41 @@ def ml_and_cost_section(closed):
         out.append("  -- ЦЭВЭР ТЭНЦЭЛ (бодит дундаж ашиг/алдагдлаар)")
         out.append(f"  ашиг-алдагдалгүй болоход хэрэгтэй win rate={100 * be:.0f}%   бодит win rate={100 * act:.0f}%")
 
-    drag = [x["r"] - x["ml"]["r_net"] for x in closed
-            if isinstance(x.get("ml"), dict) and num(x["ml"].get("r_net")) is not None]
-    if drag:
-        out.append("  -- ЗАРДАЛ (r - r_net, комисс/своп/спрэд)")
-        out.append(f"  арилжаа тутамд дундаж={fmt(mean(drag), 3)}R   нийт={fmt(sum(drag))}R   (r_net дундаж={fmt(mean([x['ml']['r_net'] for x in closed if isinstance(x.get('ml'), dict) and num(x['ml'].get('r_net')) is not None]), 3)}R)")
+    rn = [(x["r"], x["ml"]["r_net"]) for x in closed
+          if isinstance(x.get("ml"), dict) and num(x["ml"].get("r_net")) is not None]
+    if rn:
+        out.append("  -- r vs r_net (r_net-ийн тодорхойлолт кодоос баталгаажаагүй)")
+        out.append(f"  r дундаж={fmt(mean([a for a, _ in rn]), 3)}R   r_net дундаж={fmt(mean([b for _, b in rn]), 3)}R   "
+                   f"зөрүү (r - r_net) дундаж={fmt(mean([a - b for a, b in rn]), 3)}R")
 
     mlx = [x for x in closed if isinstance(x.get("ml"), dict)]
     if not mlx:
         return out
     out.append("  -- ML ШҮҮЛТҮҮР (ml.would_allow, ml.prob)")
     out.append(f"  ML mode: {dict(Counter(str(x['ml'].get('mode')) for x in mlx))}   model: {dict(Counter(str(x['ml'].get('model')) for x in mlx))}")
-    for flag in (True, False):
-        v = [x["r"] for x in mlx if x["ml"].get("would_allow") is flag]
-        out.append(stats_block(f"would_allow={flag}", v))
-    pr = sorted((x for x in mlx if num(x["ml"].get("prob")) is not None), key=lambda x: x["ml"]["prob"])
+    out.append(f"  would_allow түүхий утгууд: {dict(Counter(repr(x['ml'].get('would_allow')) for x in mlx))}")
+    out.append(f"  prob төрөл: {dict(Counter(type(x['ml'].get('prob')).__name__ for x in mlx))}   "
+               f"threshold жишээ: {sorted({repr(x['ml'].get('threshold')) for x in mlx})[:4]}")
+    for label, want in (("would_allow=ТИЙМ", True), ("would_allow=ҮГҮЙ", False)):
+        v = [x["r"] for x in mlx if truthy(x["ml"].get("would_allow")) is want]
+        out.append(stats_block(label, v))
+    unk = [x["r"] for x in mlx if truthy(x["ml"].get("would_allow")) is None]
+    if unk:
+        out.append(stats_block("would_allow=тодорхойгүй", unk))
+
+    def pnum(x):
+        v = x["ml"].get("prob")
+        if isinstance(v, str):
+            try:
+                return float(v)
+            except ValueError:
+                return None
+        return num(v)
+    pr = sorted((x for x in mlx if pnum(x) is not None), key=pnum)
     if len(pr) >= 6:
         k = len(pr) // 3
         for label, part in (("prob доод 1/3", pr[:k]), ("prob дунд 1/3", pr[k:2 * k]), ("prob дээд 1/3", pr[2 * k:])):
-            ps = [x["ml"]["prob"] for x in part]
+            ps = [pnum(x) for x in part]
             out.append(stats_block(f"{label} [{min(ps):.2f}..{max(ps):.2f}]", [x["r"] for x in part]))
     rs = defaultdict(list)
     for x in mlx:
