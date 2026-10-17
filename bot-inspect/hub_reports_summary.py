@@ -93,6 +93,48 @@ def main():
             v = [num(i["r"]) for _, _, i in with_r if bool(i.get("executed")) is flag]
             if v:
                 print(f"     executed={flag}: n={len(v)}  нийлбэр={sum(v):.1f}  дундаж={sum(v) / len(v):.2f}")
+    # ---- дэлгэрэнгүй: R-тэй idea-уудыг шинж чанараар нь задлах ----
+    def line(name, vals):
+        if not vals:
+            return f"  {name[:46]:46} n=0"
+        w = sum(1 for v in vals if v > 0)
+        return f"  {name[:46]:46} n={len(vals):4}  Σ={sum(vals):7.1f}R  дундаж={sum(vals) / len(vals):6.2f}R  win={100 * w / len(vals):3.0f}%"
+
+    def group(title, keyfn, minn=1):
+        g = defaultdict(list)
+        for d, b, i in with_r:
+            k = keyfn(d, b, i)
+            if k is not None:
+                g[k].append(num(i["r"]))
+        print(f"\n== {title} (зөвхөн R-тэй idea)")
+        for k, v in sorted(g.items(), key=lambda kv: -len(kv[1])):
+            if len(v) >= minn:
+                print(line(str(k), v))
+
+    group("ENGINE-ЭЭР", lambda d, b, i: str(i.get("engine")), 5)
+    group("ENGINE x ОРСОН/АЛГАССАН", lambda d, b, i: f"{i.get('engine')} | {'орсон' if i.get('executed') else 'алгассан'}", 8)
+    group("ЧИГЛЭЛЭЭР", lambda d, b, i: str(i.get("dir")), 1)
+    group("SIM АНГИЛАЛААР (hub-ийн үр дүн)", lambda d, b, i: str(i.get("sim")), 1)
+    group("АЛГАСАХ ШАЛТГААНААР: дундаж R (алгассан idea; ихэвчлэн сөрөг = алгасах нь зөв)",
+          lambda d, b, i: None if i.get("executed") else str(i.get("reason"))[:46], 15)
+
+    import re
+
+    def hour_of(i):
+        m = re.search(r"(\d{1,2}):(\d{2})", str(i.get("t")))
+        return int(m.group(1)) if m else None
+    group("ЦАГААР (hub-ийн цаг, GMT+8 байж болно)", lambda d, b, i: (None if hour_of(i) is None else f"{hour_of(i):02d}"), 15)
+
+    sl_ok = [(i, num(i.get("sl")), num(i.get("entry"))) for _, _, i in with_r if num(i.get("sl")) is not None and num(i.get("entry")) is not None]
+    print(f"\n== SL-ийн мэдээлэл: R-тэй idea-аас sl-тэй нь {len(sl_ok)}")
+    if len(sl_ok) >= 30:
+        bk = defaultdict(list)
+        for i, sl, en in sl_ok:
+            dd = abs(en - sl)
+            bk["a <3" if dd < 3 else "b 3-5" if dd < 5 else "c 5-8" if dd < 8 else "d >=8"].append(num(i["r"]))
+        for k in sorted(bk):
+            print(line("SL " + k[2:] + " цэг", bk[k]))
+
     print("\n== ӨДРӨӨР: [огноо  partial  n_setup]")
     print("  " + "  ".join(f"{r.get('date')}:{sum((b.get('n') or 0) for b in r.get('bots', []))}" for r in reports))
 
