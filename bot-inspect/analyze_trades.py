@@ -192,6 +192,7 @@ def analyze_file(path, since_ts):
             out.append(f"  {f[:40]:40} n={len(v):3}  avgR={fmt(mean(v), 2)}")
 
     out.extend(route_section(closed))
+    out.extend(spread_section(closed))
     out.extend(ml_and_cost_section(closed))
     return "\n".join(out), closed
 
@@ -224,6 +225,37 @@ def route_of(x):
     if m:
         return f"{m.group(1)} {m.group(2)}", None
     return c[:18] or "?", None
+
+
+def spread_section(closed):
+    """ledger-ийн ml.f-ээс БОДИТ спрэдийг сэргээнэ: ATR = |entry-sl0| / sl_atr, спрэд = spread_atr * ATR (үнийн нэгж)."""
+    sp, cost_r = [], []
+    for x in closed:
+        f = (x.get("ml") or {}).get("f") if isinstance(x.get("ml"), dict) else None
+        if not isinstance(f, dict):
+            continue
+        sa, sla = num(f.get("spread_atr")), num(f.get("sl_atr"))
+        e, s0 = num(x.get("entry")), num(x.get("sl0")) if num(x.get("sl0")) is not None else num(x.get("sl"))
+        if None in (sa, sla, e, s0) or sla <= 0:
+            continue
+        risk = abs(e - s0)
+        if risk <= 0:
+            continue
+        spread = sa * risk / sla
+        sp.append(spread)
+        cost_r.append(spread / risk)
+    if len(sp) < 5:
+        return []
+    sp_s = sorted(sp)
+
+    def q(p):
+        return sp_s[min(len(sp_s) - 1, int(p * len(sp_s)))]
+    out = ["  -- БОДИТ СПРЭД (ml.f.spread_atr * ATR; ATR = |entry-sl0| / sl_atr), үнийн нэгж"]
+    out.append(f"  n={len(sp)}  медиан={fmt(median(sp))}  дундаж={fmt(mean(sp))}  p75={fmt(q(0.75))}  p90={fmt(q(0.90))}  max={fmt(sp_s[-1])}")
+    over = lambda t: sum(1 for v in sp if v > t)
+    out.append(f"  спрэд > 0.30: {over(0.30)} ({pct(over(0.30), len(sp))})   > 0.60: {over(0.60)} ({pct(over(0.60), len(sp))})   > 1.00: {over(1.00)} ({pct(over(1.00), len(sp))})")
+    out.append(f"  спрэдийн зардал арилжаа тутамд дундаж={fmt(mean(cost_r), 3)}R   (backtest тогтмол 0.30 ≈ {fmt(0.30 / mean([abs(x.get('entry', 0) - (x.get('sl0') or x.get('sl') or 0)) for x in closed if num(x.get('entry')) is not None and num(x.get('sl0') if x.get('sl0') is not None else x.get('sl')) is not None] or [1]), 3)}R)")
+    return out
 
 
 def route_section(closed):
