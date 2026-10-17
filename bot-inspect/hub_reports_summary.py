@@ -28,6 +28,8 @@ def main():
     ap.add_argument("--dir", default=os.path.expanduser("~/hub/data/reports"))
     ap.add_argument("--family", default="", help="engine нэрэнд агуулагдах үг (жишээ SMC, V6, TDV, CRT): дэлгэрэнгүй задаргааг зөвхөн тэдэнд хязгаарлана")
     ap.add_argument("--csv", default="", help="бүх idea-г CSV болгон хадгалах (дараа нь гараар шинжлэхэд)")
+    ap.add_argument("--since", default="", help="зөвхөн энэ огнооноос (YYYY-MM-DD) хойших тайлан - forward шалгалтад")
+    ap.add_argument("--spread", type=float, default=0.0, help="спрэд (үнийн нэгж, жишээ 0.55): R-ээс спрэд/|entry-sl|-ийг хасаж цэвэр R-ийг нэмж харуулна")
     a = ap.parse_args()
     files = sorted(glob.glob(os.path.join(a.dir, "*.json")))
     if not files:
@@ -38,7 +40,11 @@ def main():
             reports.append(json.load(open(p, encoding="utf-8")))
         except Exception as e:
             print(f"(уншигдсангүй {os.path.basename(p)}: {e})")
-    print(f"Тайлан: {len(reports)}   {reports[0].get('date')} -> {reports[-1].get('date')}")
+    if a.since:
+        reports = [r for r in reports if str(r.get("date")) >= a.since]
+        if not reports:
+            raise SystemExit(f"{a.since}-аас хойших тайлан алга")
+    print(f"Тайлан: {len(reports)}   {reports[0].get('date')} -> {reports[-1].get('date')}" + (f"   (since {a.since})" if a.since else ""))
 
     bots = defaultdict(lambda: Counter())
     reason = defaultdict(lambda: Counter())
@@ -109,18 +115,31 @@ def main():
         with_r = [x for x in with_r if fam in str(x[2].get("engine")).lower()]
         print(f"\n##### ДЭЛГЭРЭНГҮЙ ЗАДАРГАА: engine ~ '{a.family}'  (R-тэй idea: {len(with_r)}) #####")
     # ---- дэлгэрэнгүй: R-тэй idea-уудыг шинж чанараар нь задлах ----
+    def net_of(i):
+        r = num(i.get("r"))
+        sl, en = num(i.get("sl")), num(i.get("entry"))
+        if r is None or not a.spread or sl is None or en is None or abs(en - sl) <= 0:
+            return r
+        return r - a.spread / abs(en - sl)
+
     def line(name, vals):
+        # vals: [(r, net_r)]
         if not vals:
             return f"  {name[:46]:46} n=0"
-        w = sum(1 for v in vals if v > 0)
-        return f"  {name[:46]:46} n={len(vals):4}  Σ={sum(vals):7.1f}R  дундаж={sum(vals) / len(vals):6.2f}R  win={100 * w / len(vals):3.0f}%"
+        rs_ = [v[0] for v in vals]
+        w = sum(1 for v in rs_ if v > 0)
+        base = f"  {name[:46]:46} n={len(vals):4}  Σ={sum(rs_):7.1f}R  дундаж={sum(rs_) / len(rs_):6.2f}R  win={100 * w / len(rs_):3.0f}%"
+        if a.spread:
+            nets = [v[1] for v in vals]
+            base += f"   | спрэд {a.spread:g}-тай: Σ={sum(nets):7.1f}R  дундаж={sum(nets) / len(nets):6.2f}R"
+        return base
 
     def group(title, keyfn, minn=1):
         g = defaultdict(list)
         for d, b, i in with_r:
             k = keyfn(d, b, i)
             if k is not None:
-                g[k].append(num(i["r"]))
+                g[k].append((num(i["r"]), net_of(i)))
         print(f"\n== {title} (зөвхөн R-тэй idea)")
         for k, v in sorted(g.items(), key=lambda kv: -len(kv[1])):
             if len(v) >= minn:
@@ -149,7 +168,7 @@ def main():
         bk = defaultdict(list)
         for i, sl, en in sl_ok:
             dd = abs(en - sl)
-            bk["a <3" if dd < 3 else "b 3-5" if dd < 5 else "c 5-8" if dd < 8 else "d >=8"].append(num(i["r"]))
+            bk["a <3" if dd < 3 else "b 3-5" if dd < 5 else "c 5-8" if dd < 8 else "d >=8"].append((num(i["r"]), net_of(i)))
         for k in sorted(bk):
             print(line("SL " + k[2:] + " цэг", bk[k]))
 
