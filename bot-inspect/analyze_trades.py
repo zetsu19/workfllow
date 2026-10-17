@@ -191,6 +191,7 @@ def analyze_file(path, since_ts):
         for f, v in sorted(fg.items(), key=lambda kv: -len(kv[1]))[:12]:
             out.append(f"  {f[:40]:40} n={len(v):3}  avgR={fmt(mean(v), 2)}")
 
+    out.extend(route_section(closed))
     out.extend(ml_and_cost_section(closed))
     return "\n".join(out), closed
 
@@ -208,6 +209,58 @@ def truthy(v):
         if t in ("false", "no", "n", "0", "block", "blocked", "deny", "skip", ""):
             return False
     return None
+
+
+ROUTE_RE = re.compile(r"^(setuppend)\s+(S\d+[a-z]?)\s+(\d+:\d+)")
+TDV_RE = re.compile(r"^(tdv_[A-Za-z0-9]+)\s+(\S+)")
+
+
+def route_of(x):
+    c = str(x.get("comment", ""))
+    m = ROUTE_RE.match(c)
+    if m:
+        return f"{m.group(1)} {m.group(2)}", m.group(3)
+    m = TDV_RE.match(c)
+    if m:
+        return f"{m.group(1)} {m.group(2)}", None
+    return c[:18] or "?", None
+
+
+def route_section(closed):
+    """comment-оор (setuppend S03 1:2, tdv_M15 Bu-OB ...) ангилж, давхарга (1:2 / 1:5)-ыг нэг setup болгон нэгтгэнэ."""
+    out = []
+    g = defaultdict(list)
+    for x in closed:
+        g[route_of(x)[0]].append(x["r"])
+    if len(g) < 2:
+        return out
+    out.append("  -- SETUP/ROUTE-ООР (comment)")
+    for k, v in sorted(g.items(), key=lambda kv: -len(kv[1])):
+        out.append(stats_block(k, v))
+    lay = defaultdict(list)
+    for x in closed:
+        r, l = route_of(x)
+        if l:
+            lay[l].append(x["r"])
+    if lay:
+        out.append("  -- ДАВХАРГА (TP харьцаа)")
+        for k, v in sorted(lay.items()):
+            out.append(stats_block(f"layer {k}", v))
+    sp = [x for x in closed if route_of(x)[1]]
+    if sp:
+        sets = defaultdict(list)
+        for x in sp:
+            sl = x.get("sl0") if num(x.get("sl0")) is not None else x.get("sl")
+            key = (x.get("symbol"), x.get("dir"), round(x.get("entry", 0), 2),
+                   round(sl, 2) if num(sl) is not None else None, route_of(x)[0])
+            sets[key].append(x["r"])
+        net = [sum(v) for v in sets.values()]
+        anyw = sum(1 for v in sets.values() if max(v) > 0)
+        out.append(f"  -- НЭГДСЭН SETUP (давхаргуудыг нэгтгэв): {len(sets)} setup ← {len(sp)} арилжаа")
+        out.append(f"  setup-ын дор хаяж нэг давхарга ашигтай: {anyw} ({pct(anyw, len(sets))})   "
+                   f"setup тутмын нийт R дундаж={fmt(mean(net), 2)}   нийт={fmt(sum(net))}R")
+        out.append("  (давхаргууд бие даасан биш тул бодит түүврийн хэмжээ нь арилжааны тооноос ~2 дахин бага)")
+    return out
 
 
 def ml_and_cost_section(closed):
